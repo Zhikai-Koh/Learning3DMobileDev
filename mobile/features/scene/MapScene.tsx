@@ -35,7 +35,7 @@ function MapFloor(){
 }
 
 type MapCameraProps = {
-    cameraPositionRef: React.MutableRefObject<direction>;
+    cameraPositionRef: React.RefObject<direction>;
 };
 
 function MapCamera({ cameraPositionRef }: MapCameraProps){
@@ -49,7 +49,7 @@ function MapCamera({ cameraPositionRef }: MapCameraProps){
 }
 
 export default function Map(){
-    const cameraPositionRef = useRef<direction>({x:15,y:20,z:15});
+    const cameraPositionRef = useRef<direction>({x:0,y:40,z:30});
 
     return(
         <View style = {{ flex: 1, backgroundColor: "#111827" }}>
@@ -79,8 +79,8 @@ export default function Map(){
 
 const styles = StyleSheet.create({
     interactiveBackground: {
-        backgroundColor: "transparent",
-        position: "absolute",
+        flex: 1,
+        position: 'absolute',
         top: 0,
         left: 0,
         right: 0,
