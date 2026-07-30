@@ -1,6 +1,25 @@
-import { useEffect, useRef } from 'react'
+import { Suspense, useEffect, useRef } from 'react'
+import { useGLTF } from '@react-three/drei'
 import { Canvas, useFrame } from '@react-three/fiber'
-import type { Group } from 'three'
+import { Mesh, type Group } from 'three'
+import raftFloorUrl from '../assets/models/10by10Floor.glb?url'
+
+function RaftFloor() {
+  const { scene } = useGLTF(raftFloorUrl)
+
+  useEffect(() => {
+    scene.traverse((object) => {
+      if (object instanceof Mesh) {
+        object.castShadow = true
+        object.receiveShadow = true
+      }
+    })
+  }, [scene])
+
+  return <primitive object={scene} scale={0.1} />
+}
+
+useGLTF.preload(raftFloorUrl)
 
 const turnSpeed = 1.5
 
@@ -53,12 +72,7 @@ function Raft() {
 
   return (
     <group position={[0, 0.22, 0]} rotation={[0, -0.35, 0]} ref ={raftRef}>
-      {[-0.6, 0, 0.6].map((x) => (
-        <mesh key={x} position={[x, 0, 0]} castShadow receiveShadow>
-          <boxGeometry args={[0.5, 0.22, 2.15]} />
-          <meshStandardMaterial color="#b7793e" roughness={0.82} />
-        </mesh>
-      ))}
+      <RaftFloor />
       <mesh position={[0, 0.42, 0]} castShadow>
         <boxGeometry args={[0.12, 0.85, 0.12]} />
         <meshStandardMaterial color="#51321e" />
@@ -101,7 +115,9 @@ export function OceanScene() {
         shadow-mapSize={[1024, 1024]}
       />
       <Ocean />
-      <Raft />
+      <Suspense fallback={null}>
+        <Raft />
+      </Suspense>
     </Canvas>
   )
 }
