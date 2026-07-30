@@ -68,12 +68,6 @@ export default function App() {
           </Pressable>
         </Link>
 
-        <Link href="/interaction" asChild>
-          <Pressable style={styles.button}>
-            <Text style={styles.buttonText}>Open Interaction Lab</Text>
-          </Pressable>
-        </Link>
-
         <StatusBar style="auto" />
       </SafeAreaView>
     </SafeAreaProvider>

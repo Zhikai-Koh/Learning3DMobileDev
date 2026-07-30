@@ -9,48 +9,84 @@ export type direction = {
 }
 
 type InteractionProps = {
-    onMove: (direction: direction) => void;
+    onPinch: (scaleChange: number) => void;
+    onPan: (panChange: { x: number; z: number }) => void;
+    onTap: (tapPosition: { x: number; y: number }) => void;
 };
 
-export default function Interaction({ onMove }: InteractionProps) {
+type ViewSize = {
+  width: number;
+  height: number;
+}
 
-    const [position, setPosition] = useState({ x: 0, y: 0 });
+
+
+export default function Interaction({onPinch, onPan, onTap }: InteractionProps) {
+    const [viewSize, setViewSize] = useState<ViewSize>({
+      width: 0,
+      height: 0,
+    });
 
     const panGesture = useMemo(
     () =>
         Gesture.Pan()
         .runOnJS(true)
         .onChange((event) => {
-            onMove({
+            onPan({
                 x: event.changeX,
-                y: 0,
                 z: event.changeY
             });
-            console.log("Touch moved to: ", event.translationX, event.translationY);
+            // console.log("Touch moved to: ", event.changeX, event.changeY);
         }),
-    []
+    [onPan]
     );
 
-    const tapGesture = useMemo(
+    const pinchGesture = useMemo(
     () =>
-        Gesture.Tap()
+        Gesture.Pinch()
         .runOnJS(true)
-        .onBegin(() => {
-            console.log("Touch started");
-        })
-        .onEnd(() => {
-            console.log("Tapped");
-        })
-        .onFinalize((_event, success) => {
-            console.log("Touch ended, success: ", success);
+        .onChange((event) => {
+            // console.log("Pinch scale: ", event.scaleChange);
+            onPinch(event.scaleChange);
         }),
-    []
+    [onPinch]
     );
 
-    const combinedGesture = Gesture.Simultaneous(panGesture, tapGesture);
+const tapGesture = useMemo(
+  () =>
+    Gesture.Tap()
+      .runOnJS(true)
+      .onEnd((event) => {
+        if (
+          viewSize.width === 0 ||
+          viewSize.height === 0
+        ) {
+          return;
+        }
+
+        const normalizedX =
+          (event.x / viewSize.width) * 2 - 1;
+
+        const normalizedY =
+          -(event.y / viewSize.height) * 2 + 1;
+
+        onTap({
+          x: normalizedX,
+          y: normalizedY,
+        });
+      }),
+  [onTap, viewSize]
+);
+
+    const combinedGesture = Gesture.Simultaneous(panGesture, tapGesture, pinchGesture);
   return (
     <GestureDetector gesture={combinedGesture}>
-      <View style={{ flex: 1, backgroundColor: "transparent" }} />
+      <View
+        style={{ flex: 1 }}
+        onLayout={(event) => {
+          setViewSize({width: event.nativeEvent.layout.width, height: event.nativeEvent.layout.height});
+        }}
+      />
     </GestureDetector>
   );
 }

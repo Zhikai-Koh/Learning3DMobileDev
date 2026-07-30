@@ -10,7 +10,6 @@ export default function RootLayout() {
         <Stack.Screen name="scene" options={{ title: '3D Lab' }} />
         <Stack.Screen name="combat" options={{ title: 'Hitbox Lab' }} />
         <Stack.Screen name="map" options={{ title: 'Map Lab' }} />
-        <Stack.Screen name="interaction" options={{ title: 'Interaction Lab' }} />
       </Stack>
     </GestureHandlerRootView>
   );

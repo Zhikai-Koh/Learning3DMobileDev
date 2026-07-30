@@ -1,0 +1,181 @@
+.app-shell {
+  width: min(1180px, 100%);
+  margin: 0 auto;
+  padding: 32px;
+}
+
+.app-header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 32px;
+  margin-bottom: 24px;
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  color: #67e8f9;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.app-header h1 {
+  max-width: 680px;
+  margin: 0;
+  color: #f8fafc;
+  font-size: clamp(2rem, 5vw, 4.5rem);
+  line-height: 0.95;
+  letter-spacing: -0.055em;
+}
+
+.lesson-goal {
+  max-width: 360px;
+  margin: 0;
+  color: #a8b7c8;
+  line-height: 1.6;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(280px, 0.75fr);
+  gap: 18px;
+}
+
+.scene-card,
+.practice-card {
+  position: relative;
+  min-height: 560px;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 24px;
+  background: #102033;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+}
+
+.scene-card canvas {
+  display: block;
+}
+
+.scene-label {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 13px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  color: #f8fafc;
+  background: rgba(6, 20, 35, 0.72);
+  backdrop-filter: blur(12px);
+  pointer-events: none;
+}
+
+.scene-label span {
+  font-weight: 750;
+}
+
+.scene-label small {
+  color: #9fb4c8;
+}
+
+.practice-card {
+  display: flex;
+  flex-direction: column;
+  padding: 22px;
+  color: #e5edf6;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    #101c2b;
+  background-size: 24px 24px;
+}
+
+.practice-card h2 {
+  margin: 0 0 8px;
+  color: #f8fafc;
+  font-size: 1.4rem;
+}
+
+.practice-card > p {
+  margin: 0;
+  color: #9fb0c2;
+  line-height: 1.5;
+}
+
+.pointer-pad {
+  display: grid;
+  flex: 1;
+  min-height: 270px;
+  margin: 22px 0 16px;
+  place-items: center;
+  border: 1px dashed rgba(103, 232, 249, 0.52);
+  border-radius: 18px;
+  color: #a5f3fc;
+  background: rgba(8, 47, 73, 0.28);
+  cursor: crosshair;
+}
+
+.pointer-pad p {
+  max-width: 200px;
+  margin: 0;
+  text-align: center;
+  line-height: 1.5;
+}
+
+.event-readout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.readout-item {
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 12px;
+  background: rgba(5, 14, 25, 0.56);
+}
+
+.readout-item span,
+.readout-item strong {
+  display: block;
+}
+
+.readout-item span {
+  margin-bottom: 4px;
+  color: #8094a9;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.readout-item strong {
+  color: #e6fbff;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+@media (max-width: 820px) {
+  .app-shell {
+    padding: 20px;
+  }
+
+  .app-header {
+    display: block;
+  }
+
+  .lesson-goal {
+    margin-top: 18px;
+  }
+
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .scene-card,
+  .practice-card {
+    min-height: 460px;
+  }
+}

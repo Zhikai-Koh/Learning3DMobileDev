@@ -1,7 +1,10 @@
 {
   "expo": {
     "scheme": "mobile-learning",
-    "plugins": ["expo-router"],
+    "plugins": [
+      "expo-router",
+      "expo-asset"
+    ],
     "experiments": {
       "typedRoutes": true
     },
