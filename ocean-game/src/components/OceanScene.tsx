@@ -2,7 +2,7 @@ import { Suspense, useEffect, useRef } from 'react'
 import { useAnimations, useGLTF } from '@react-three/drei'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { Mesh, type Group } from 'three'
-import characterUrl from '../assets/models/CrabCube2.glb?url'
+import characterUrl from '../assets/models/DefaultCrab.glb?url'
 
 useGLTF.preload(characterUrl)
 
@@ -11,11 +11,14 @@ const movementKeys = ['KeyW', 'KeyA', 'KeyS', 'KeyD']
 
 function Character() {
   const characterRef = useRef<Group>(null)
-  const currentAction = useRef<'Walk2' | 'Wave2' | null>(null)
+  const currentAction = useRef<'Walk' | null>(null)
   const heldKeys = useRef(new Set<string>())
+
+  //scene is the root of the Three.js hierarchy made from Blender. It contains all the meshes, lights, and cameras that were exported from Blender. Animations is an array of animation clips that were exported from Blender.
   const { scene, animations } = useGLTF(characterUrl)
   const { actions } = useAnimations(animations, characterRef)
 
+  //Set up shadows for all meshes in the scene
   useEffect(() => {
     scene.traverse((object) => {
       if (object instanceof Mesh) {
@@ -25,6 +28,7 @@ function Character() {
     })
   }, [scene])
 
+  // Set up event listeners for key presses and releases
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       heldKeys.current.add(event.code)
@@ -49,6 +53,7 @@ function Character() {
     }
   }, [])
 
+  // Update character movement and animation based on held keys
   useFrame((_, delta) => {
     const character = characterRef.current
     if (!character) return
@@ -66,28 +71,32 @@ function Character() {
       character.rotation.y -= turnSpeed * delta
     }
 
+    //Check if any movement is clicked
     const isMoving = movementKeys.some((key) => heldKeys.current.has(key))
-    const nextActionName = isMoving ? 'Walk2' : 'Wave2'
 
-    if (currentAction.current === nextActionName) return
-
-    const nextAction = actions[nextActionName]
-    if (!nextAction) return
-
-    const previousActionName = currentAction.current
-    if (previousActionName) {
-      actions[previousActionName]?.fadeOut(0.2)
+    if (!isMoving) {
+      if (currentAction.current) {
+        actions[currentAction.current]?.fadeOut(0.2)
+        currentAction.current = null
+      }
+      return
     }
 
+    if (currentAction.current === 'Walk') return
+
+    //Set next animation
+    const nextAction = actions.Walk
+    if (!nextAction) return
+
+    //fade in the walking animation
     nextAction.reset().fadeIn(0.2).play()
-    currentAction.current = nextActionName
+    currentAction.current = 'Walk'
   })
 
   return (
     <group
       ref={characterRef}
-      position={[0, 0.27, 0]}
-      scale={0.25}
+      position={[0, 0.06, 0]}
     >
       <primitive object={scene} />
     </group>
