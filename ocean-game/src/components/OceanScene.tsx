@@ -1,11 +1,20 @@
 import { Suspense, useEffect, useRef } from 'react'
-import { useGLTF } from '@react-three/drei'
+import { useAnimations, useGLTF } from '@react-three/drei'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { Mesh, type Group } from 'three'
-import raftFloorUrl from '../assets/models/10by10Floor.glb?url'
+import characterUrl from '../assets/models/CrabCube2.glb?url'
 
-function RaftFloor() {
-  const { scene } = useGLTF(raftFloorUrl)
+useGLTF.preload(characterUrl)
+
+const turnSpeed = 1.5
+const movementKeys = ['KeyW', 'KeyA', 'KeyS', 'KeyD']
+
+function Character() {
+  const characterRef = useRef<Group>(null)
+  const currentAction = useRef<'Walk2' | 'Wave2' | null>(null)
+  const heldKeys = useRef(new Set<string>())
+  const { scene, animations } = useGLTF(characterUrl)
+  const { actions } = useAnimations(animations, characterRef)
 
   useEffect(() => {
     scene.traverse((object) => {
@@ -16,71 +25,71 @@ function RaftFloor() {
     })
   }, [scene])
 
-  return <primitive object={scene} scale={0.1} />
-}
-
-useGLTF.preload(raftFloorUrl)
-
-const turnSpeed = 1.5
-
-
-function Raft() {
-  const raftRef = useRef<Group>(null)
-  const heldKeys = useRef(new Set<string>())
-
   useEffect(() => {
-      function onKeyDown(event: KeyboardEvent) {
-        heldKeys.current.add(event.code)
-      } 
+    function onKeyDown(event: KeyboardEvent) {
+      heldKeys.current.add(event.code)
+    }
 
-      function onKeyUp(event: KeyboardEvent) {
-        heldKeys.current.delete(event.code)
-      }
+    function onKeyUp(event: KeyboardEvent) {
+      heldKeys.current.delete(event.code)
+    }
 
-      function onBlur(){
-        heldKeys.current.clear()
-      }
+    function onBlur() {
+      heldKeys.current.clear()
+    }
 
-      window.addEventListener('keyup', onKeyUp)
-      window.addEventListener('keydown', onKeyDown)
-      window.addEventListener('blur', onBlur)
+    window.addEventListener('keyup', onKeyUp)
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('blur', onBlur)
 
-      return () => {
-        window.removeEventListener('keydown', onKeyDown)
-        window.removeEventListener('keyup', onKeyUp)
-        window.removeEventListener('blur', onBlur)
-
-      } 
-    }, [])
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
+      window.removeEventListener('blur', onBlur)
+    }
+  }, [])
 
   useFrame((_, delta) => {
-    if (!raftRef.current) return
+    const character = characterRef.current
+    if (!character) return
 
     if (heldKeys.current.has('KeyW')) {
-      raftRef.current.translateZ(-2 * delta)
+      character.translateZ(-2 * delta)
     }
     if (heldKeys.current.has('KeyS')) {
-      raftRef.current.translateZ(2 * delta)
+      character.translateZ(2 * delta)
     }
-    if (heldKeys.current.has('KeyA')){
-      raftRef.current.rotation.y += turnSpeed * delta
+    if (heldKeys.current.has('KeyA')) {
+      character.rotation.y += turnSpeed * delta
     }
-    if (heldKeys.current.has('KeyD')){
-      raftRef.current.rotation.y -= turnSpeed * delta
+    if (heldKeys.current.has('KeyD')) {
+      character.rotation.y -= turnSpeed * delta
     }
+
+    const isMoving = movementKeys.some((key) => heldKeys.current.has(key))
+    const nextActionName = isMoving ? 'Walk2' : 'Wave2'
+
+    if (currentAction.current === nextActionName) return
+
+    const nextAction = actions[nextActionName]
+    if (!nextAction) return
+
+    const previousActionName = currentAction.current
+    if (previousActionName) {
+      actions[previousActionName]?.fadeOut(0.2)
+    }
+
+    nextAction.reset().fadeIn(0.2).play()
+    currentAction.current = nextActionName
   })
 
   return (
-    <group position={[0, 0.22, 0]} rotation={[0, -0.35, 0]} ref ={raftRef}>
-      <RaftFloor />
-      <mesh position={[0, 0.42, 0]} castShadow>
-        <boxGeometry args={[0.12, 0.85, 0.12]} />
-        <meshStandardMaterial color="#51321e" />
-      </mesh>
-      <mesh position={[0, 0.68, 0]} rotation={[0, 0, -0.08]} castShadow>
-        <boxGeometry args={[1.05, 0.58, 0.04]} />
-        <meshStandardMaterial color="#f0e3c3" side={2} />
-      </mesh>
+    <group
+      ref={characterRef}
+      position={[0, 0.27, 0]}
+      scale={0.25}
+    >
+      <primitive object={scene} />
     </group>
   )
 }
@@ -116,7 +125,7 @@ export function OceanScene() {
       />
       <Ocean />
       <Suspense fallback={null}>
-        <Raft />
+        <Character />
       </Suspense>
     </Canvas>
   )
