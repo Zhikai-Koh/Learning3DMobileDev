@@ -1,5 +1,12 @@
-import { Suspense, useEffect, useMemo, useRef, type RefObject } from 'react'
-import { OrbitControls, useAnimations, useGLTF } from '@react-three/drei'
+import {
+  Suspense,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type RefObject,
+} from 'react'
+import { Html, OrbitControls, useAnimations, useGLTF } from '@react-three/drei'
 import { Canvas, useFrame } from '@react-three/fiber'
 import {
   Box3,
@@ -26,26 +33,35 @@ const islandScale = 0.25
 const islandCenterHeight = 7.421
 const moveSpeed = 2
 const characterGroundOffset = 0.06
-const rockCollisionPadding = 0.35
+const attackImpactTime = 1.25
+const attackReachPastClaw = 1
+const initialRockHealth = 3
 
 type WorldRefs = {
   islandRef: RefObject<Group | null>
   rockRef: RefObject<Group | null>
 }
 
-function Character({ islandRef, rockRef }: WorldRefs) {
+type CharacterProps = WorldRefs & {
+  onRockHit: () => void
+}
+
+function Character({ islandRef, rockRef, onRockHit }: CharacterProps) {
   const characterRef = useRef<Group>(null)
   const currentAction = useRef<'Walk' | 'Scare' | null>(null)
   const scareRequested = useRef(false)
   const attackRequested = useRef(false)
   const attackPlaying = useRef(false)
+  const attackHitChecked = useRef(false)
   const heldKeys = useRef(new Set<string>())
   const terrainRaycaster = useRef(new Raycaster())
+  const attackRaycaster = useRef(new Raycaster())
   const nextPosition = useRef(new Vector3())
   const moveOffset = useRef(new Vector3())
   const rayOrigin = useRef(new Vector3())
   const downDirection = useRef(new Vector3(0, -1, 0))
-  const rockBounds = useRef(new Box3())
+  const attackDirection = useRef(new Vector3())
+  const attackBonePosition = useRef(new Vector3())
 
   //scene is the root of the Three.js hierarchy made from Blender. It contains all the meshes, lights, and cameras that were exported from Blender. Animations is an array of animation clips that were exported from Blender.
   const { scene, animations } = useGLTF(characterUrl)
@@ -192,22 +208,22 @@ function Character({ islandRef, rockRef }: WorldRefs) {
       rayOrigin.current.set(proposedPosition.x, 20, proposedPosition.z)
       terrainRaycaster.current.set(rayOrigin.current, downDirection.current)
 
-      const [terrainHit] = terrainRaycaster.current.intersectObject(island, true)
+      const [islandHit] = terrainRaycaster.current.intersectObject(island, true)
+      const rock = rockRef.current
+      const [rockHit] = rock
+        ? terrainRaycaster.current.intersectObject(rock, true)
+        : []
+
+      // The ray starts above both models, so the closer hit is the higher
+      // walkable surface at the crab's proposed X/Z position.
+      const terrainHit =
+        rockHit && (!islandHit || rockHit.distance < islandHit.distance)
+          ? rockHit
+          : islandHit
 
       if (terrainHit) {
         proposedPosition.y = terrainHit.point.y + characterGroundOffset
-
-        const rock = rockRef.current
-        const hitsRock = rock
-          ? rockBounds.current
-              .setFromObject(rock)
-              .expandByScalar(rockCollisionPadding)
-              .containsPoint(proposedPosition)
-          : false
-
-        if (!hitsRock) {
-          character.position.copy(proposedPosition)
-        }
+        character.position.copy(proposedPosition)
       }
     }
 
@@ -235,10 +251,52 @@ function Character({ islandRef, rockRef }: WorldRefs) {
 
       const attackAction = actions.AttackSmash
       if (attackAction) {
-          attackAction.setLoop(LoopOnce, 1)
-          attackAction.clampWhenFinished = false 
-          attackAction.reset().fadeIn(0.1).play()
-          attackPlaying.current = true
+        attackHitChecked.current = false
+        attackAction.setLoop(LoopOnce, 1)
+        attackAction.clampWhenFinished = false
+        attackAction.reset().fadeIn(0.1).play()
+        attackPlaying.current = true
+      }
+    }
+
+    const attackAction = actions.AttackSmash
+    if (
+      attackPlaying.current &&
+      !attackHitChecked.current &&
+      attackAction &&
+      attackAction.time >= attackImpactTime
+    ) {
+      attackHitChecked.current = true
+
+      const attackBone = scene.getObjectByName('Bone026')
+      const rock = rockRef.current
+
+      if (attackBone && rock) {
+        character.getWorldPosition(rayOrigin.current)
+        attackBone.getWorldPosition(attackBonePosition.current)
+
+        attackDirection.current
+          .copy(attackBonePosition.current)
+          .sub(rayOrigin.current)
+
+        const distanceToClaw = attackDirection.current.length()
+        attackDirection.current.normalize()
+
+        attackRaycaster.current.set(rayOrigin.current, attackDirection.current)
+        attackRaycaster.current.far = distanceToClaw + attackReachPastClaw
+
+        const rockHits = attackRaycaster.current.intersectObject(rock, true)
+        if (rockHits.length > 0) {
+          console.log('Rock hit!')
+          onRockHit()
+        } else {
+          console.log('Attack missed the rock')
+        }
+      } else {
+        console.log('Attack check unavailable', {
+          attackBoneFound: Boolean(attackBone),
+          rockFound: Boolean(rock),
+        })
       }
     }
 
@@ -302,8 +360,22 @@ function Island({ islandRef }: Pick<WorldRefs, 'islandRef'>) {
   return <primitive ref={islandRef} object={islandScene} />
 }
 
-function Rock({ rockRef }: Pick<WorldRefs, 'rockRef'>) {
+type RockProps = Pick<WorldRefs, 'rockRef'> & {
+  health: number
+  maxHealth: number
+}
+
+function Rock({ rockRef, health, maxHealth }: RockProps) {
   const { scene: rockScene } = useGLTF(rockUrl)
+  const healthBarPosition = useMemo(() => {
+    rockScene.updateMatrixWorld(true)
+
+    const bounds = new Box3().setFromObject(rockScene)
+    const center = bounds.getCenter(new Vector3())
+
+    return [center.x, bounds.max.y + 1.5, center.z] as [number, number, number]
+  }, [rockScene])
+  const healthPercent = (health / maxHealth) * 100
 
   useEffect(() => {
     rockScene.traverse((object) => {
@@ -317,18 +389,46 @@ function Rock({ rockRef }: Pick<WorldRefs, 'rockRef'>) {
   return (
     <group ref={rockRef} name="interactable-rock">
       <primitive object={rockScene} />
+      <Html position={healthBarPosition} center distanceFactor={8}>
+        <div
+          className="rock-healthbar"
+          role="progressbar"
+          aria-label="Rock health"
+          aria-valuemin={0}
+          aria-valuemax={maxHealth}
+          aria-valuenow={health}
+        >
+          <span>Rock {health}/{maxHealth}</span>
+          <div className="rock-healthbar-track">
+            <div
+              className="rock-healthbar-fill"
+              style={{ width: `${healthPercent}%` }}
+            />
+          </div>
+        </div>
+      </Html>
     </group>
   )
 }
 
-function IslandWorld({ islandRef, rockRef }: WorldRefs) {
+type IslandWorldProps = WorldRefs & {
+  rockHealth: number
+}
+
+function IslandWorld({ islandRef, rockRef, rockHealth }: IslandWorldProps) {
   return (
     <group
       position={[0, -islandCenterHeight * islandScale, 0]}
       scale={islandScale}
     >
       <Island islandRef={islandRef} />
-      <Rock rockRef={rockRef} />
+      {rockHealth > 0 && (
+        <Rock
+          rockRef={rockRef}
+          health={rockHealth}
+          maxHealth={initialRockHealth}
+        />
+      )}
     </group>
   )
 }
@@ -336,11 +436,34 @@ function IslandWorld({ islandRef, rockRef }: WorldRefs) {
 function GameWorld() {
   const islandRef = useRef<Group>(null)
   const rockRef = useRef<Group>(null)
+  const [rockHealth, setRockHealth] = useState(initialRockHealth)
+
+  useEffect(() => {
+    if (rockHealth < initialRockHealth) {
+      console.log(`Rock health: ${rockHealth}/${initialRockHealth}`)
+    }
+
+    if (rockHealth === 0) {
+      console.log('Rock destroyed!')
+    }
+  }, [rockHealth])
+
+  function handleRockHit() {
+    setRockHealth((currentHealth) => Math.max(0, currentHealth - 1))
+  }
 
   return (
     <>
-      <IslandWorld islandRef={islandRef} rockRef={rockRef} />
-      <Character islandRef={islandRef} rockRef={rockRef} />
+      <IslandWorld
+        islandRef={islandRef}
+        rockRef={rockRef}
+        rockHealth={rockHealth}
+      />
+      <Character
+        islandRef={islandRef}
+        rockRef={rockRef}
+        onRockHit={handleRockHit}
+      />
     </>
   )
 }

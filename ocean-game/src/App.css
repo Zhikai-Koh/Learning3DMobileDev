@@ -8,3 +8,34 @@
 .game canvas {
   display: block;
 }
+
+.rock-healthbar {
+  width: 108px;
+  padding: 7px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  border-radius: 8px;
+  color: #fff;
+  background: rgba(20, 18, 16, 0.82);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  user-select: none;
+  pointer-events: none;
+}
+
+.rock-healthbar-track {
+  height: 7px;
+  margin-top: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.rock-healthbar-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: #70d65c;
+  transition: width 160ms ease-out;
+}
