@@ -13,6 +13,8 @@ import characterUrl from '../assets/models/DefaultCrab.glb?url'
 import {
   ATTACK_IMPACT_TIME,
   CHARACTER_GROUND_OFFSET,
+  EAT_CONSUME_TIME,
+  EAT_DISTANCE,
   GRAB_DISTANCE,
   GRAB_PICKUP_TIME,
 } from './gameConfig'
@@ -32,11 +34,14 @@ type PlayerProps = WorldRefs & {
   health: number
   maxHealth: number
   npcRefs: RefObject<Map<string, Group>>
+  npcHealth: Record<string, number>
+  edibleNpcIds: ReadonlySet<string>
   carriedNpcId: string | null
   onRockHit: () => void
   onNpcHit: (id: string) => void
   onNpcGrab: (id: string) => void
   onNpcDrop: () => void
+  onNpcEat: (id: string) => void
 }
 
 export function Player({
@@ -46,19 +51,27 @@ export function Player({
   health,
   maxHealth,
   npcRefs,
+  npcHealth,
+  edibleNpcIds,
   carriedNpcId,
   onRockHit,
   onNpcHit,
   onNpcGrab,
   onNpcDrop,
+  onNpcEat,
 }: PlayerProps) {
-  const currentAction = useRef<'Walk' | 'Scare' | 'Grab' | null>(null)
+  const currentAction = useRef<
+    'Walk' | 'Scare' | 'Grab' | 'Eating' | 'Dying' | null
+  >(null)
+  const deathStarted = useRef(false)
   const scareRequested = useRef(false)
   const attackRequested = useRef(false)
   const grabRequested = useRef(false)
+  const eatRequested = useRef(false)
   const attackPlaying = useRef(false)
   const attackHitChecked = useRef(false)
   const grabPickupChecked = useRef(false)
+  const eatConsumeChecked = useRef(false)
   const heldKeys = useRef(new Set<string>())
 
   const terrainRaycaster = useRef(new Raycaster())
@@ -113,11 +126,36 @@ export function Player({
     })
   }, [scene])
 
+  useEffect(() => {
+    if (health > 0 || deathStarted.current) return
+
+    deathStarted.current = true
+    heldKeys.current.clear()
+    scareRequested.current = false
+    attackRequested.current = false
+    grabRequested.current = false
+    eatRequested.current = false
+    attackPlaying.current = false
+
+    for (const action of Object.values(actions)) {
+      action?.stop()
+    }
+
+    const dyingAction = actions.Dying
+    if (dyingAction) {
+      dyingAction.setLoop(LoopOnce, 1)
+      dyingAction.clampWhenFinished = true
+      dyingAction.reset().fadeIn(0.1).play()
+      currentAction.current = 'Dying'
+    }
+  }, [actions, health])
+
   // Clear one-shot animation flags when the mixer finishes an action.
   useEffect(() => {
     const scareAction = actions.Scare
     const attackAction = actions.AttackSmash
     const grabAction = actions.Grab
+    const eatingAction = actions.Eating
 
     function onAnimationFinished(event: { action: AnimationAction }) {
       if (event.action === scareAction) {
@@ -125,6 +163,10 @@ export function Player({
       }
 
       if (event.action === grabAction) {
+        currentAction.current = null
+      }
+
+      if (event.action === eatingAction) {
         currentAction.current = null
       }
 
@@ -143,10 +185,14 @@ export function Player({
   // Browser keyboard input becomes requests and a set of currently held keys.
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
+      if (health <= 0) return
+
       if (
         event.code === 'KeyF' &&
         !event.repeat &&
-        currentAction.current !== 'Scare'
+        currentAction.current !== 'Scare' &&
+        currentAction.current !== 'Grab' &&
+        currentAction.current !== 'Eating'
       ) {
         scareRequested.current = true
       }
@@ -156,7 +202,8 @@ export function Player({
         !event.repeat &&
         !attackPlaying.current &&
         currentAction.current !== 'Scare' &&
-        currentAction.current !== 'Grab'
+        currentAction.current !== 'Grab' &&
+        currentAction.current !== 'Eating'
       ) {
         attackRequested.current = true
       }
@@ -167,10 +214,23 @@ export function Player({
           onNpcDrop()
         } else if (
           currentAction.current !== 'Scare' &&
-          currentAction.current !== 'Grab'
+          currentAction.current !== 'Grab' &&
+          currentAction.current !== 'Eating'
         ) {
           grabRequested.current = true
         }
+      }
+
+      if (
+        event.code === 'KeyE' &&
+        !event.repeat &&
+        health < maxHealth &&
+        carriedNpcId === null &&
+        currentAction.current !== 'Scare' &&
+        currentAction.current !== 'Grab' &&
+        currentAction.current !== 'Eating'
+      ) {
+        eatRequested.current = true
       }
 
       heldKeys.current.add(event.code)
@@ -185,6 +245,7 @@ export function Player({
       scareRequested.current = false
       attackRequested.current = false
       grabRequested.current = false
+      eatRequested.current = false
     }
 
     window.addEventListener('keyup', onKeyUp)
@@ -196,11 +257,12 @@ export function Player({
       window.removeEventListener('keyup', onKeyUp)
       window.removeEventListener('blur', onBlur)
     }
-  }, [carriedNpcId, onNpcDrop])
+  }, [carriedNpcId, health, maxHealth, onNpcDrop])
 
   useFrame((_, delta) => {
     const player = playerRef.current
     if (!player) return
+    if (health <= 0) return
 
     // A/D rotate the player's gameplay group.
     if (heldKeys.current.has('KeyA')) {
@@ -255,6 +317,7 @@ export function Player({
       scareRequested.current = false
       attackRequested.current = false
       grabRequested.current = false
+      eatRequested.current = false
 
       const scareAction = actions.Scare
       if (scareAction) {
@@ -273,6 +336,7 @@ export function Player({
     if (grabRequested.current) {
       grabRequested.current = false
       attackRequested.current = false
+      eatRequested.current = false
 
       const grabAction = actions.Grab
       if (grabAction) {
@@ -302,6 +366,7 @@ export function Player({
 
       for (const [npcId, npc] of npcRefs.current) {
         if (npcId === carriedNpcId) continue
+        if ((npcHealth[npcId] ?? 0) <= 0) continue
 
         npc.getWorldPosition(npcWorldPosition.current)
         const distance = rayOrigin.current.distanceTo(npcWorldPosition.current)
@@ -321,6 +386,58 @@ export function Player({
     }
 
     if (currentAction.current === 'Grab') return
+
+    if (eatRequested.current) {
+      eatRequested.current = false
+      attackRequested.current = false
+
+      const eatingAction = actions.Eating
+      if (eatingAction) {
+        actions.AttackSmash?.stop()
+        attackPlaying.current = false
+        actions.Walk?.fadeOut(0.1)
+        eatConsumeChecked.current = false
+        eatingAction.setLoop(LoopOnce, 1)
+        eatingAction.clampWhenFinished = false
+        eatingAction.reset().fadeIn(0.1).play()
+        currentAction.current = 'Eating'
+      }
+    }
+
+    const eatingAction = actions.Eating
+    if (
+      currentAction.current === 'Eating' &&
+      !eatConsumeChecked.current &&
+      eatingAction &&
+      eatingAction.time >= EAT_CONSUME_TIME
+    ) {
+      eatConsumeChecked.current = true
+      player.getWorldPosition(rayOrigin.current)
+
+      let closestNpcId: string | null = null
+      let closestDistance = EAT_DISTANCE
+
+      for (const [npcId, npc] of npcRefs.current) {
+        if (!edibleNpcIds.has(npcId)) continue
+
+        npc.getWorldPosition(npcWorldPosition.current)
+        const distance = rayOrigin.current.distanceTo(npcWorldPosition.current)
+
+        if (distance <= closestDistance) {
+          closestDistance = distance
+          closestNpcId = npcId
+        }
+      }
+
+      if (closestNpcId) {
+        console.log(`${closestNpcId} eaten!`)
+        onNpcEat(closestNpcId)
+      } else {
+        console.log('No dead crab close enough to eat')
+      }
+    }
+
+    if (currentAction.current === 'Eating') return
 
     if (attackRequested.current) {
       attackRequested.current = false
@@ -382,6 +499,8 @@ export function Player({
           }
 
           for (const [npcId, npc] of npcRefs.current) {
+            if ((npcHealth[npcId] ?? 0) <= 0) continue
+
             const [npcHit] = attackRaycaster.current.intersectObject(npc, true)
 
             if (npcHit && npcHit.distance < closestDistance) {

@@ -46,6 +46,7 @@ type CrabNpcProps = WorldRefs & {
   isCarried: boolean
   onRefChange: (id: string, npc: Group | null) => void
   onPlayerHit: () => void
+  onDeathFinished: (id: string) => void
 }
 
 export function CrabNpc({
@@ -61,8 +62,11 @@ export function CrabNpc({
   isCarried,
   onRefChange,
   onPlayerHit,
+  onDeathFinished,
 }: CrabNpcProps) {
   const npcRef = useRef<Group>(null)
+  const deathStarted = useRef(false)
+  const deathGrounded = useRef(false)
   const attackPlaying = useRef(false)
   const attackHitChecked = useRef(false)
   const attackCooldown = useRef(0)
@@ -111,7 +115,7 @@ export function CrabNpc({
 
   useEffect(() => {
     const walkAction = actions.Walk
-    if (!walkAction) return
+    if (!walkAction || health <= 0) return
 
     actions.AttackSmash?.stop()
     attackPlaying.current = false
@@ -134,17 +138,39 @@ export function CrabNpc({
     return () => {
       walkAction.stop()
     }
-  }, [actions, isCarried])
+  }, [actions, health, isCarried])
+
+  useEffect(() => {
+    if (health > 0 || deathStarted.current) return
+
+    deathStarted.current = true
+    attackPlaying.current = false
+    attackHitChecked.current = false
+    actions.Walk?.stop()
+    actions.AttackSmash?.stop()
+
+    const dyingAction = actions.Dying
+    if (dyingAction) {
+      dyingAction.setLoop(LoopOnce, 1)
+      dyingAction.clampWhenFinished = true
+      dyingAction.reset().fadeIn(0.1).play()
+    }
+  }, [actions, health])
 
   useEffect(() => {
     const attackAction = actions.AttackSmash
-    if (!attackAction) return
+    const dyingAction = actions.Dying
 
     function onAnimationFinished(event: { action: AnimationAction }) {
+      if (event.action === dyingAction) {
+        onDeathFinished(id)
+        return
+      }
+
       if (event.action !== attackAction) return
 
       attackPlaying.current = false
-      if (!isCarried) {
+      if (!isCarried && health > 0) {
         actions.Walk?.setLoop(LoopRepeat, Infinity).reset().fadeIn(0.15).play()
       }
     }
@@ -154,7 +180,7 @@ export function CrabNpc({
     return () => {
       mixer.removeEventListener('finished', onAnimationFinished)
     }
-  }, [actions, isCarried, mixer])
+  }, [actions, health, id, isCarried, mixer, onDeathFinished])
 
   useFrame((_, delta) => {
     const npc = npcRef.current
@@ -200,6 +226,31 @@ export function CrabNpc({
           walkAction.reset().fadeIn(0.1).play()
         }
         carriedWiggleTimer.current = 3 + Math.random() * 4
+      }
+
+      return
+    }
+
+    if (health <= 0) {
+      if (!deathGrounded.current) {
+        rayOrigin.current.set(npc.position.x, 20, npc.position.z)
+        terrainRaycaster.current.set(rayOrigin.current, downDirection.current)
+
+        const [islandHit] = terrainRaycaster.current.intersectObject(island, true)
+        const rock = rockRef.current
+        const [rockHit] = rock
+          ? terrainRaycaster.current.intersectObject(rock, true)
+          : []
+        const terrainHit =
+          rockHit && (!islandHit || rockHit.distance < islandHit.distance)
+            ? rockHit
+            : islandHit
+
+        if (terrainHit) {
+          npc.position.y =
+            terrainHit.point.y + CHARACTER_GROUND_OFFSET * scale
+        }
+        deathGrounded.current = true
       }
 
       return

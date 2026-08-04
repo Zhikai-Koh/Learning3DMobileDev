@@ -2,6 +2,9 @@ export const CHARACTER_GROUND_OFFSET = 0.06
 export const ATTACK_IMPACT_TIME = 1.25
 export const GRAB_PICKUP_TIME = 1.25
 export const GRAB_DISTANCE = 2.4
+export const EAT_CONSUME_TIME = 1.25
+export const EAT_DISTANCE = 2.4
+export const EAT_HEAL_AMOUNT = 2
 
 export const INITIAL_ROCK_HEALTH = 3
 export const INITIAL_PLAYER_HEALTH = 5

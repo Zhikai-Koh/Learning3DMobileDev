@@ -1,16 +1,63 @@
-import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type RefObject,
+} from 'react'
 import { OrbitControls } from '@react-three/drei'
-import { Canvas } from '@react-three/fiber'
-import { MOUSE, type Group } from 'three'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
+import { MOUSE, Vector3, type Group } from 'three'
 import { CrabNpc } from '../game/CrabNpc'
 import {
   INITIAL_NPC_HEALTH,
   INITIAL_PLAYER_HEALTH,
   INITIAL_ROCK_HEALTH,
+  EAT_HEAL_AMOUNT,
   NPC_DEFINITIONS,
 } from '../game/gameConfig'
 import { Player } from '../game/Player'
 import { World } from '../game/World'
+
+const cameraFollowHeight = 0.55
+const cameraFollowSharpness = 6
+
+type FollowableControls = {
+  target: Vector3
+  update: () => void
+}
+
+function CameraFollow({ playerRef }: { playerRef: RefObject<Group | null> }) {
+  const camera = useThree((state) => state.camera)
+  const controls = useThree((state) => state.controls) as
+    | FollowableControls
+    | null
+  const desiredTarget = useRef(new Vector3())
+  const followMovement = useRef(new Vector3())
+
+  useFrame((_, delta) => {
+    const player = playerRef.current
+    if (!player || !controls) return
+
+    player.getWorldPosition(desiredTarget.current)
+    desiredTarget.current.y += cameraFollowHeight
+
+    // Moving the target and camera by the same amount preserves the player's
+    // chosen orbit angle and zoom while the whole camera rig follows the crab.
+    const followAmount = 1 - Math.exp(-cameraFollowSharpness * delta)
+    followMovement.current
+      .copy(desiredTarget.current)
+      .sub(controls.target)
+      .multiplyScalar(followAmount)
+
+    controls.target.add(followMovement.current)
+    camera.position.add(followMovement.current)
+    controls.update()
+  })
+
+  return null
+}
 
 // GameWorld owns state shared between the world, player and NPC components.
 function GameWorld() {
@@ -22,6 +69,10 @@ function GameWorld() {
   const [rockHealth, setRockHealth] = useState(INITIAL_ROCK_HEALTH)
   const [playerHealth, setPlayerHealth] = useState(INITIAL_PLAYER_HEALTH)
   const [carriedNpcId, setCarriedNpcId] = useState<string | null>(null)
+  const [edibleNpcIds, setEdibleNpcIds] = useState<Set<string>>(() => new Set())
+  const [consumedNpcIds, setConsumedNpcIds] = useState<Set<string>>(
+    () => new Set(),
+  )
   const [npcHealth, setNpcHealth] = useState<Record<string, number>>(() =>
     Object.fromEntries(
       NPC_DEFINITIONS.map((npc) => [npc.id, INITIAL_NPC_HEALTH]),
@@ -75,6 +126,25 @@ function GameWorld() {
     setCarriedNpcId(null)
   }, [])
 
+  const handleNpcDeathFinished = useCallback((id: string) => {
+    setEdibleNpcIds((currentIds) => {
+      const nextIds = new Set(currentIds)
+      nextIds.add(id)
+      return nextIds
+    })
+  }, [])
+
+  const handleNpcEat = useCallback((id: string) => {
+    setConsumedNpcIds((currentIds) => {
+      const nextIds = new Set(currentIds)
+      nextIds.add(id)
+      return nextIds
+    })
+    setPlayerHealth((currentHealth) =>
+      Math.min(INITIAL_PLAYER_HEALTH, currentHealth + EAT_HEAL_AMOUNT),
+    )
+  }, [])
+
   return (
     <>
       <World
@@ -90,16 +160,22 @@ function GameWorld() {
         health={playerHealth}
         maxHealth={INITIAL_PLAYER_HEALTH}
         npcRefs={npcRefs}
+        npcHealth={npcHealth}
+        edibleNpcIds={edibleNpcIds}
         carriedNpcId={carriedNpcId}
         onRockHit={handleRockHit}
         onNpcHit={handleNpcHit}
         onNpcGrab={handleNpcGrab}
         onNpcDrop={handleNpcDrop}
+        onNpcEat={handleNpcEat}
       />
 
+      <CameraFollow playerRef={playerRef} />
+
       {NPC_DEFINITIONS.map((npc) => {
+        if (consumedNpcIds.has(npc.id)) return null
+
         const health = npcHealth[npc.id] ?? 0
-        if (health <= 0) return null
 
         return (
           <CrabNpc
@@ -116,6 +192,7 @@ function GameWorld() {
             isCarried={carriedNpcId === npc.id}
             onRefChange={handleNpcRef}
             onPlayerHit={handlePlayerHit}
+            onDeathFinished={handleNpcDeathFinished}
           />
         )
       })}
