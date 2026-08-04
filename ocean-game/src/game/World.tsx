@@ -10,7 +10,7 @@ import type { WorldRefs } from './gameTypes'
 useGLTF.preload(islandUrl)
 useGLTF.preload(rockUrl)
 
-const islandScale = 0.38
+const islandScale = 1
 const islandCenterHeight = 7.421
 const islandWaterlineHeight = 2.2
 
