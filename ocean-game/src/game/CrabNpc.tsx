@@ -217,15 +217,20 @@ export function CrabNpc({
         npc.rotateY(grabbedItemRotationOffset)
       }
 
-      carriedWiggleTimer.current -= delta
-      if (carriedWiggleTimer.current <= 0) {
-        const walkAction = actions.Walk
-        if (walkAction && !walkAction.isRunning()) {
-          walkAction.setLoop(LoopOnce, 1)
-          walkAction.clampWhenFinished = false
-          walkAction.reset().fadeIn(0.1).play()
+      if (health > 0) {
+        carriedWiggleTimer.current -= delta
+        if (carriedWiggleTimer.current <= 0) {
+          const walkAction = actions.Walk
+          if (walkAction && !walkAction.isRunning()) {
+            walkAction.setLoop(LoopOnce, 1)
+            walkAction.clampWhenFinished = false
+            walkAction.reset().fadeIn(0.1).play()
+          }
+          carriedWiggleTimer.current = 3 + Math.random() * 4
         }
-        carriedWiggleTimer.current = 3 + Math.random() * 4
+      } else {
+        // A dropped corpse needs a fresh terrain placement after being carried.
+        deathGrounded.current = false
       }
 
       return
@@ -233,6 +238,8 @@ export function CrabNpc({
 
     if (health <= 0) {
       if (!deathGrounded.current) {
+        npc.rotation.x = 0
+        npc.rotation.z = 0
         rayOrigin.current.set(npc.position.x, 20, npc.position.z)
         terrainRaycaster.current.set(rayOrigin.current, downDirection.current)
 

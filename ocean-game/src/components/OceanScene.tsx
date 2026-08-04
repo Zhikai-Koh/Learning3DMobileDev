@@ -188,10 +188,14 @@ function GameWorld() {
   }, [rockHealth])
 
   useEffect(() => {
-    if (carriedNpcId && (npcHealth[carriedNpcId] ?? 0) <= 0) {
+    if (
+      carriedNpcId &&
+      (npcHealth[carriedNpcId] ?? 0) <= 0 &&
+      !edibleNpcIds.has(carriedNpcId)
+    ) {
       setCarriedNpcId(null)
     }
-  }, [carriedNpcId, npcHealth])
+  }, [carriedNpcId, edibleNpcIds, npcHealth])
 
   const handleNpcRef = useCallback((id: string, npc: Group | null) => {
     if (npc) {

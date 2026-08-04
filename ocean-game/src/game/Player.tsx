@@ -366,7 +366,10 @@ export function Player({
 
       for (const [npcId, npc] of npcRefs.current) {
         if (npcId === carriedNpcId) continue
-        if ((npcHealth[npcId] ?? 0) <= 0) continue
+
+        const npcIsAlive = (npcHealth[npcId] ?? 0) > 0
+        const npcIsDead = edibleNpcIds.has(npcId)
+        if (!npcIsAlive && !npcIsDead) continue
 
         npc.getWorldPosition(npcWorldPosition.current)
         const distance = rayOrigin.current.distanceTo(npcWorldPosition.current)
